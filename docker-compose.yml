@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build:
+      context: ./services/orchestrator
+    environment:
+      - STT_URL=http://stt:8000/v1
+      - TTS_URL=http://tts:8888/v1
+      - LLM_URL=http://host.docker.internal:11434/api/chat
+      - CHROMA_URL=http://chroma:8000
+      - DB_PATH=/app/data/memory.db
+    volumes:
+      - ./services/orchestrator:/app
+      - orchestrator_data:/app/data
+    ports:
+      - "5000:5000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - chroma
+
+  stt:
+    image: fedirz/faster-whisper-server:latest-cpu
+    ports:
+      - "8000:8000"
+    environment:
+      - WHISPER_MODEL=tiny.en
+
+  tts:
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:latest
+    ports:
+      - "8888:8000"
+    environment:
+      - DEVICE=cpu
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  knowledge_ingest:
+    build:
+      context: ./services/knowledge_ingest
+    environment:
+      - CHROMA_URL=http://chroma:8000
+      - KNOWLEDGE_DIR=/knowledge
+    volumes:
+      - ./knowledge:/knowledge
+      - ./services/knowledge_ingest:/app
+    depends_on:
+      - chroma
+
+volumes:
+  orchestrator_data:
+  chroma_data:
