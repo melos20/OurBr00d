@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tts_benchmark.core.registry import AdapterRegistration, AdapterRegistry
 from tts_benchmark.inference.adapters.kokoro_82m import Kokoro82MAdapter
+from tts_benchmark.inference.adapters.piper_tts import PIPER_TTS_AVAILABLE, PiperTTSAdapter
 from tts_benchmark.inference.base import BaseTTSAdapter
 from tts_benchmark.inference.adapters.moss_tts_nano_100m import (
     MOSS_TTS_AVAILABLE,
@@ -24,6 +25,8 @@ def build_default_registry() -> AdapterRegistry:
     adapters: list[BaseTTSAdapter] = [
         Kokoro82MAdapter(),
     ]
+    if PIPER_TTS_AVAILABLE:
+        adapters.append(PiperTTSAdapter())
     if MOSS_TTS_AVAILABLE:
         adapters.append(MossTTSNano100MAdapter())
     if ChatterBoxAdapter is not None:

@@ -9,17 +9,27 @@ import httpx
 def build_interface(api_base: str) -> gr.Blocks:
     client = httpx.Client(base_url=api_base, timeout=30.0)
 
-    def refresh_models() -> tuple[list[str], str]:
+    def refresh_models() -> tuple[list[dict], str]:
         try:
             # Use a very short timeout for startup/refresh to avoid hanging the UI
             response = client.get("/v1/models", timeout=2.0)
             response.raise_for_status()
             models = response.json()["models"]
-            choices = [m["model_key"] for m in models]
-            return choices, (choices[0] if choices else "")
+            first = models[0]["model_key"] if models else ""
+            return models, first
         except (httpx.HTTPError, httpx.TimeoutException):
             print("Note: Could not connect to TTS API. Please ensure the API is running (mode --api).")
             return [], ""
+
+    def model_choices(models: list[dict]) -> list[str]:
+        return [m["model_key"] for m in models]
+
+    def voice_choices(models: list[dict], model_key: str) -> tuple[list[str], str]:
+        for model in models:
+            if model["model_key"] == model_key:
+                voices = model.get("voices", [])
+                return voices, (voices[0] if voices else "")
+        return [], ""
 
     def run_synthesis(
         text: str,
@@ -84,11 +94,22 @@ def build_interface(api_base: str) -> gr.Blocks:
         except httpx.HTTPError as exc:
             raise RuntimeError(f"API request failed: {exc}") from exc
 
-    def refresh_models_update() -> gr.update:
-        choices, selected = refresh_models()
-        return gr.update(choices=choices, value=selected)
+    def refresh_models_update() -> tuple[gr.update, gr.update]:
+        models, selected_model = refresh_models()
+        voices, selected_voice = voice_choices(models, selected_model)
+        return (
+            gr.update(choices=model_choices(models), value=selected_model),
+            gr.update(choices=voices, value=selected_voice),
+        )
 
-    initial_choices, initial_selected = refresh_models()
+    def update_voice_for_model(model_key: str) -> gr.update:
+        models, _ = refresh_models()
+        voices, selected_voice = voice_choices(models, model_key)
+        return gr.update(choices=voices, value=selected_voice)
+
+    initial_models, initial_selected_model = refresh_models()
+    initial_model_choices = model_choices(initial_models)
+    initial_voice_choices, initial_selected_voice = voice_choices(initial_models, initial_selected_model)
 
     with gr.Blocks(title="TTS Benchmark") as demo:
         gr.Markdown("# TTS Benchmark and Evaluation")
@@ -96,8 +117,12 @@ def build_interface(api_base: str) -> gr.Blocks:
         with gr.Tab("Generate"):
             gr.Markdown("Start the API first (`--mode api`) and then click **Refresh models**.")
             text = gr.Textbox(label="Prompt", lines=4)
-            model_key = gr.Dropdown(label="Model", choices=initial_choices, value=initial_selected)
-            voice_key = gr.Textbox(label="Voice (optional)")
+            model_key = gr.Dropdown(label="Model", choices=initial_model_choices, value=initial_selected_model)
+            voice_key = gr.Dropdown(
+                label="Voice",
+                choices=initial_voice_choices,
+                value=initial_selected_voice,
+            )
             speed = gr.Slider(label="Speed", minimum=0.5, maximum=2.0, value=1.0, step=0.1)
             settings_json = gr.Textbox(
                 label="Model settings JSON",
@@ -112,8 +137,9 @@ def build_interface(api_base: str) -> gr.Blocks:
 
             refresh_btn.click(
                 fn=refresh_models_update,
-                outputs=[model_key],
+                outputs=[model_key, voice_key],
             )
+            model_key.change(fn=update_voice_for_model, inputs=[model_key], outputs=[voice_key])
 
             generate_btn.click(
                 fn=run_synthesis,

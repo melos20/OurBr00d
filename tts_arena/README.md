@@ -1,6 +1,6 @@
 # TTS Arena
 
-Standalone TTS Benchmark and Evaluation Tool inside this repository.
+Standalone TTS Benchmark and Evaluation Tool.
 
 This project provides:
 - FastAPI backend for synthesis and evaluation APIs
@@ -8,166 +8,78 @@ This project provides:
 - SQLite persistence for generation runs and 1-5 ratings
 - Adapter-based model registry so new models can be added with one class
 
-## Status
-
-Current adapters are functional local stubs that generate deterministic tone audio for testability.
-The architecture is ready for full Hugging Face model inference, but real model loading logic must be implemented inside adapter classes.
-
-## Fresh Clone Quick Start
-
-### 1) Clone and enter the repository
-
-```bash
-git clone <your-repo-url>
-cd OurBr00d
-```
-
-### 2) Install uv (if needed)
-
-macOS/Linux:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Then restart your shell, or ensure uv is on PATH.
-
-### 3) Install project dependencies
-
-```bash
-cd tts_arena
-uv sync
-```
-
-### 4) Run API (Terminal A)
-
-```bash
-uv run python -m tts_benchmark.main --mode api --host 127.0.0.1 --port 8000
-```
-
-API base URL: http://127.0.0.1:8000
-
-### 5) Run UI (Terminal B)
-
-```bash
-cd tts_arena
-uv run python -m tts_benchmark.main --mode ui --host 127.0.0.1 --port 7860 --api-base http://127.0.0.1:8000
-```
-
-UI URL: http://127.0.0.1:7860
-
-### 6) Run tests
-
-From repository root:
-
-```bash
-python3 -m pytest tts_arena/tests/tts_benchmark -q
-```
-
 ## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph UserLayer[User Layer]
-      U1[Evaluator]
-      U2[Pipeline Service]
+flowchart LR
+    subgraph Client[Interface]
+      Gradio[Gradio UI]
+      CURL[CLI / External]
     end
 
-    subgraph UILayer[UI Layer : Gradio : port 7860]
-      UI1[Generate Tab]
-      UI2[Evaluate Tab]
-      UI3[Retrieve Tab]
+    subgraph Service[API Service]
+      API[FastAPI Router]
+      Registry[Model Registry]
+      Adapters[TTS Adapters]
     end
 
-    subgraph APILayer["API Layer : FastAPI : port 8000"]
-      A0["main.py mode router"]
-      A1["api/app.py app factory"]
-      A2["api/routes.py endpoints"]
-      A3["health"]
-      A4["v1/models"]
-      A5["v1/synthesize"]
-      A6["POST v1/evaluations"]
-      A7["GET v1/evaluations/id"]
+    subgraph Data[Storage]
+      DB[(SQLite)]
+      Audio[Audio Runs]
+      Models[Local Models]
     end
 
-    subgraph CoreLayer[Core]
-      C1[core/config.py RuntimeConfig]
-      C2[core/database.py Engine + Session]
-      C3[core/registry.py AdapterRegistry]
-    end
+    Client --> API
+    API --> Registry
+    Registry --> Adapters
+    Adapters --> Models
+    API --> DB
+    API --> Audio
+```
 
-    subgraph InferenceLayer[Inference]
-      I0[inference/base.py BaseTTSAdapter]
-      I1[kokoro_82m.py]
-      I2[chatterbox.py]
-      I3[moss_tts_nano_100m.py]
-      I4[qwen_tts.py]
-      I5[_simple_tone.py synthesis helper]
-    end
+## Quick Start (Standalone)
 
-    subgraph StorageLayer[Storage + Models]
-      S1[models/db_models.py]
-      S2[models/api_schemas.py]
-      S3[storage/repositories.py]
-      S4[(SQLite : tts_arena/data/tts_benchmark.sqlite3)]
-      S5[["Audio Files : tts_arena/outputs/runs/*.wav"]]
-    end
+Run these commands from within the `tts_arena` directory.
 
-    U1 --> UI1
-    U1 --> UI2
-    U1 --> UI3
-    U2 --> A5
-    U2 --> A6
-    U2 --> A7
+### 1) Install dependencies
 
-    UI1 --> A5
-    UI2 --> A6
-    UI3 --> A7
+We use `uv` for fast dependency management.
 
-    A0 --> A1
-    A1 --> A2
-    A2 --> A3
-    A2 --> A4
-    A2 --> A5
-    A2 --> A6
-    A2 --> A7
+```bash
+# Install uv if you haven't:
+# curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    A2 --> C1
-    A2 --> C2
-    A2 --> C3
-    C3 --> I0
-    I0 --> I1
-    I0 --> I2
-    I0 --> I3
-    I0 --> I4
-    I1 --> I5
-    I2 --> I5
-    I3 --> I5
-    I4 --> I5
+uv sync
+```
 
-    A2 --> S2
-    A2 --> S3
-    S3 --> S1
-    C2 --> S4
-    S3 --> S4
-    A5 --> S5
+### 2) Run API (Terminal A)
+
+```bash
+uv run python -m tts_benchmark.main --mode api
+```
+API base URL: http://127.0.0.1:8000
+
+### 3) Run UI (Terminal B)
+
+```bash
+uv run python -m tts_benchmark.main --mode ui
+```
+UI URL: http://127.0.0.1:7860
+
+### 4) Run Tests
+
+```bash
+uv run pytest
 ```
 
 ## Project Structure
 
 ```text
-tts_arena/
+.
 ├── pyproject.toml
-├── src/tts_benchmark/
-│   ├── api/
-│   ├── core/
-│   ├── inference/
-│   │   └── adapters/
-│   ├── models/
-│   ├── storage/
-│   ├── ui/
-│   └── main.py
-└── tests/tts_benchmark/
+├── src/tts_benchmark/      # Source code
+├── tests/                  # Test suite
+└── tts_arena/              # Local data (DB, Models, Outputs)
 ```
 
 ## API Surface
