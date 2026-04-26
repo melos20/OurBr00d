@@ -1,0 +1,113 @@
+openapi: 3.0.3
+info:
+  title: TTS Benchmark API
+  description: API for integrating text-to-speech capabilities independent of the UI
+  version: 1.0.0
+paths:
+  /api/v1/generate:
+    post:
+      summary: Synthesize Text to Audio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+                - model_id
+              properties:
+                text:
+                  type: string
+                  description: The text to be synthesized
+                model_id:
+                  type: string
+                  description: Identifier of the local HuggingFace model (e.g., kokoro-82m, omnivoice)
+      responses:
+        '200':
+          description: Successful generation
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid input or unsupported model
+  /api/v1/evaluations:
+    post:
+      summary: Submit Evaluation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text_input
+                - model_id
+                - score_speed
+                - score_human_like
+                - score_warmth
+                - score_no_hiccups
+              properties:
+                text_input:
+                  type: string
+                model_id:
+                  type: string
+                score_speed:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                score_human_like:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                score_warmth:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                score_no_hiccups:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                persist_audio:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Created
+    get:
+      summary: List Evaluations
+      responses:
+        '200':
+          description: Array of past evaluations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evaluation'
+components:
+  schemas:
+    Evaluation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        text_input:
+          type: string
+        model_id:
+          type: string
+        score_speed:
+          type: integer
+        score_human_like:
+          type: integer
+        score_warmth:
+          type: integer
+        score_no_hiccups:
+          type: integer
+        audio_persisted:
+          type: boolean
+        audio_file_path:
+          type: string
